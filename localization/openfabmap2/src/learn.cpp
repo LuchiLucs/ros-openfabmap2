@@ -1,0 +1,198 @@
+#include "../include/learn.h"
+
+ ///////////////////////
+    //// *** LEARN ***/////
+    ///////////////////////
+    //// Constructor
+    // Pre: Valid NodeHandle provided
+    // Post: --Calls 'subscribeToImages'
+    FABMapLearn::FABMapLearn(ros::NodeHandle nh) :
+        OpenFABMap2(nh),
+        trainCount_(0)
+    {
+    	// Read private parameters
+        ros::NodeHandle local_nh_("~");
+
+        local_nh_.param<int>("maxImages", maxImages_, 10);
+
+        // Added:
+        // VocabTrainOptions:
+        // 
+    	// a smaller clustersize increases the specificity of each codeword
+    	// and will increase the number of words in the vocabulary
+    	//
+    	// example value: 0.45
+        local_nh_.param<double>("clusterSize", clusterSize_, 0.6);
+
+        // Added:
+        // ChowLiuOptions:
+        //
+    	// a large amount of data is required to store all mutual information from
+    	// which the minimum spanning tree is created. e.g. an 8000 word codebook 
+    	// requires 1.2 Gb RAM. Increasing the threshold results in information being 
+    	// discarded, and a lower memory requirement. Too high a threshold may result 
+    	// in necessary information being discarded and the tree not being created.
+    	// A threshold of 0 takes longer and may fail due to memory requirements
+    	//
+    	// example value: 0.0005
+        local_nh_.param<double>("LowerInformationBound", lowerInformationBound_, 0);
+
+        trainer = cv::of2::BOWMSCTrainer(clusterSize_);
+
+        subscribeToImages();
+    }
+
+    //// Destructor
+    FABMapLearn::~FABMapLearn()
+    {
+    }
+
+    //// Image Callback
+    // Pre:
+    // Post: --Calls 'shutdown'
+    void FABMapLearn::processImgCallback(const sensor_msgs::ImageConstPtr& image_msg)
+    {
+        ROS_INFO_STREAM("Learning image sequence number: " << image_msg->header.seq);
+        cv_bridge::CvImagePtr cv_ptr;
+        try
+        {
+            cv_ptr = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO8);
+        }
+        catch (cv_bridge::Exception& e)
+        {
+            ROS_ERROR("cv_bridge exception: %s", e.what());
+            return;
+        }
+
+        ROS_DEBUG("Received %d by %d image, depth %d, channels %d",
+            cv_ptr->image.cols,
+            cv_ptr->image.rows,
+            cv_ptr->image.depth(),
+            cv_ptr->image.channels());
+
+        ROS_INFO("--Detect");
+        detector->detect(cv_ptr->image, kpts);
+        ROS_INFO("--Extract");
+        extractor->compute(cv_ptr->image, kpts, descriptors);
+
+        // Check if frame was useful
+        if (!descriptors.empty() && kpts.size() > minDescriptorCount_)
+        {
+            trainer.add(descriptors);
+            trainCount_++;
+            ROS_INFO_STREAM("--Added to trainer" << " (" << trainCount_ << " / " << maxImages_ << ")");
+
+            // Add the frame to the sample pile
+            // cv_bridge::CvImagePtr are smart pointers
+            framesSampled.push_back(cv_ptr);
+
+            if (visualise_)
+            {
+                ROS_DEBUG("Attempting to visualise key points.");
+                cv::Mat feats;
+                cv::drawKeypoints(cv_ptr->image, kpts, feats);
+
+                cv::imshow("KeyPoints", feats);
+                char c = cv::waitKey(10);
+                // TODO: nicer exit
+                if(c == 27) // 27 is the ESC key
+                {
+                    working_ = false;
+                    saveQuit_ = true;
+                }
+            }
+        }
+        else
+        {
+            ROS_WARN("--Image not descriptive enough, ignoring.");
+        }
+
+        // TODO: cv::waitKey(10) // Console triggered save&close
+        if ((!(trainCount_ < maxImages_) && maxImages_ > 0) || saveQuit_)
+        {
+            shutdown();
+        }
+    }
+
+    //// Find words
+    // Pre:
+    // Post:
+    void FABMapLearn::findWords()
+    {
+        cv::Mat bow;
+
+        for (std::vector<cv_bridge::CvImagePtr>::iterator frameIter = framesSampled.begin();
+            frameIter != framesSampled.end();
+            ++frameIter)
+        {
+            detector->detect((*frameIter)->image, kpts);
+            bide->compute((*frameIter)->image, kpts, bow);
+            bows.push_back(bow);
+        }
+    }
+
+    //// File saver
+    // Pre: Application has write premission to path provided
+    // Post: YML files are written for 'vocab' 'clTree' and 'bows'
+    void FABMapLearn::saveCodebook()
+    {
+        ROS_INFO("Saving codebook...");
+        cv::FileStorage fs;
+
+        ROS_INFO_STREAM("--Saving Vocabulary to " << vocabPath_);
+        fs.open(vocabPath_,
+                    cv::FileStorage::WRITE);
+        fs << "Vocabulary" << vocab;
+        fs.release();
+
+        ROS_INFO_STREAM("--Saving Chow Liu Tree to " << clTreePath_);
+        fs.open(clTreePath_,
+                        cv::FileStorage::WRITE);
+        fs << "Tree" << clTree;
+        fs.release();
+
+        ROS_INFO_STREAM("--Saving Trained Bag of Words to " << trainbowsPath_);
+        fs.open(trainbowsPath_,
+                        cv::FileStorage::WRITE);
+        fs << "Trainbows" << bows;
+        fs.release();
+    }
+
+    //// Unlink Callback
+    // Pre:
+    // Post: --Calls 'saveCodebook' --Cleanup
+    void FABMapLearn::shutdown()
+    {
+        ROS_INFO("Clustering to produce vocabulary");
+        vocab = trainer.cluster();
+        ROS_INFO("Vocabulary contains %d words, %d dims",vocab.rows,vocab.cols);
+
+        ROS_INFO("Setting vocabulary...");
+        bide->setVocabulary(vocab);
+
+        ROS_INFO("Gathering BoW's...");
+        findWords();
+
+        ROS_INFO("Making the Chow Liu tree...");
+        tree.add(bows);
+        clTree = tree.make(lowerInformationBound_);
+
+        ROS_INFO("Saving work completed...");
+        saveCodebook();
+
+        // Flag this worker as complete
+        working_ = false;
+
+        if (sub_.getNumPublishers() > 0)
+        {
+            // Un-subscribe to Images
+            ROS_WARN_STREAM("Shutting down " << sub_.getNumPublishers() << " subscriptions...");
+            sub_.shutdown();
+            nh_.shutdown();
+        }
+        else
+        {
+            ROS_ERROR("Shutdown called with no existing subscriptions...");
+        }
+    }
+    // end class implementation FABMapLearn

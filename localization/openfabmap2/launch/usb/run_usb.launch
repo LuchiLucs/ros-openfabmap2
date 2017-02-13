@@ -1,0 +1,8 @@
+<launch>
+  <include file="$(find app_camera)/camera_usb.launch" />
+
+  <include file="$(find openfabmap2)/launch/run.launch" >
+    <arg name="image" value="/camera_usb/image_raw" />
+    <arg name="locationImage" value="/camera_usb/image_raw" />
+  </include>
+</launch>

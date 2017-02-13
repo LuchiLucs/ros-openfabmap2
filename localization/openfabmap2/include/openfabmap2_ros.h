@@ -1,0 +1,63 @@
+#ifndef _openfabmap2_ros_h
+#define _openfabmap2_ros_h
+
+#include <openfabmap2_msgs/Match.h>
+#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/Image.h>
+#include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/contrib/openfabmap.hpp>
+#include <opencv2/nonfree/features2d.hpp>
+
+    class OpenFABMap2
+    {
+    public:
+        OpenFABMap2(ros::NodeHandle nh);
+
+        virtual ~OpenFABMap2();
+
+        void subscribeToImages();
+        bool isWorking() const;
+
+        virtual void shutdown() = 0;
+        virtual void processImgCallback(const sensor_msgs::ImageConstPtr& image_msg) = 0;
+
+    protected:
+        ros::NodeHandle nh_;
+
+        // Image transport
+        image_transport::Subscriber sub_;
+
+        // OpenFABMap2
+        cv::of2::FabMap *fabMap;
+        cv::Ptr<cv::FeatureDetector> detector;
+        cv::Ptr<cv::DescriptorExtractor>  extractor;
+        cv::Ptr<cv::DescriptorMatcher> matcher;
+        cv::Ptr<cv::BOWImgDescriptorExtractor> bide;
+        std::vector<cv::KeyPoint> kpts;
+
+        bool firstFrame_;
+        bool visualise_;
+        bool working_;
+        bool saveQuit_;
+        std::string vocabPath_;
+        std::string clTreePath_;
+        std::string trainbowsPath_;
+        int minDescriptorCount_;
+
+        // Data
+        cv::Mat vocab;
+        cv::Mat clTree;
+        cv::Mat trainbows;
+        
+        // PreRun descriptors (added)
+        cv::Mat bows;
+
+    private:
+        image_transport::ImageTransport it_;
+
+        std::string imgTopic_;
+        std::string transport_;
+    };
+#endif

@@ -1,0 +1,6 @@
+The only purpose of this file is to make git synchronize the folder in which
+this file is located.
+
+This folder is the default destination of new codebooks created by the learn
+launch file execution, and it must exists before the learn launch file is
+executed.

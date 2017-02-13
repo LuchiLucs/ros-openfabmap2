@@ -1,0 +1,7 @@
+<launch>
+  <include file="$(find app_camera)/camera_ueye.launch" />
+
+  <include file="$(find openfabmap2)/launch/learn.launch" >
+    <arg name="image" value="/camera_ueye/image_rect" />
+  </include>
+</launch>

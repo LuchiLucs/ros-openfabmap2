@@ -1,0 +1,21 @@
+%YAML:1.0
+image_width: 752
+image_height: 480
+camera_name: camera_ueye
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [422.752239, 0, 350.320214, 0, 422.102098, 228.163436, 0, 0, 1]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.296231, 0.07831099999999999, 0.00171, 0.000129, 0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [315.327606, 0, 344.662563, 0, 0, 375.274811, 225.642925, 0, 0, 0, 1, 0]

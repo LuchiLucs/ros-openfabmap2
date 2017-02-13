@@ -1,0 +1,38 @@
+<launch>
+  <arg name="image" />
+
+  <node pkg="openfabmap2" type="place_exploration_node" name="place_exploration_node" output="screen">
+    <remap from="image"         to="$(arg image)"/>
+    <remap from="locationImage" to="$(arg locationImage)"/>
+
+    <param name="maxBOW"          value="500"/>
+    <param name="transport"       value="raw"/>
+    <param name="MinDescriptorCount" value="50" />
+    
+
+    <param name="vocab"          value="$(find openfabmap2)/codebooks/new/vocab.yml"/>
+    <param name="clTree"         value="$(find openfabmap2)/codebooks/new/clTree.yml"/>
+    <param name="trainbows"      value="$(find openfabmap2)/codebooks/new/trainbows.yml"/>
+    <param name="DetectorType"   value="SURF"/>
+    <param name="FabMapVersion"  value="FABMAP2"/>
+    <!-- NewPlaceMethod:
+      MEAN_FIELD: Use the Mean Field approximation to determine the new place likelihood (cannot be used for FabMap2)
+      SAMPLED: Use the Sampled approximation to determine the new place likelihood. Requires training data (see below)
+    -->
+    <param name="NewPlaceMethod" value="Sampled"/>
+    <!-- BayesMethod:
+      NAIVE_BAYES: Assume a naive Bayes approximation to feature distribution (i.e. all features are independent). Note that a Chow-Liu tree is still required but only the absolute word probabilities are used, feature co-occurrance information is discarded
+      CHOW_LIU: Use the full Chow-Liu tree to approximate feature distribution
+    -->
+    <param name="BayesMethod"    value="ChowLiu"/>
+    <!-- SimpleMotion:
+      MOTION_MODEL: Update the location distribution using the previous distribution as a (weak) prior. Used for matching in sequences (i.e. successive video frames)
+    -->
+    <param name="SimpleMotion"   value="0"/>
+    <param name="minMatchValue"  value="0.98"/>
+    <param name="sampleRate"     value="12.5"/>
+    <param name="maxMatches"     value="3"/>
+    <param name="visualise"      value="True"/>
+  </node>
+
+</launch>

@@ -1,0 +1,33 @@
+#ifndef _place_recognition_ros_h
+#define _place_recognition_ros_h
+
+#include "openfabmap2_ros.h"
+
+	/// Running OpenFABMap2
+	class FABMapRun : public OpenFABMap2
+	{
+	public:
+		FABMapRun(ros::NodeHandle nh);
+		~FABMapRun();
+
+		void processImgCallback(const sensor_msgs::ImageConstPtr& image_msg);
+		void visualiseMatches(std::vector<cv::of2::IMatch> &matches);
+		bool loadCodebook();
+		void shutdown();
+
+	private:
+		int maxMatches_;
+		double minMatchValue_;
+		bool disable_self_match_;
+		int self_match_window_;
+		bool disable_unknown_match_;
+		bool only_new_places_;
+
+
+		ros::Publisher pub_;
+		std::vector<int> toImgSeq;
+		cv::Mat confusionMat;
+		int sizeImgSeq;
+	};
+
+#endif
